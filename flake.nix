@@ -15,6 +15,17 @@
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # The `flakeModules.devshellSkills` module for the dev shell. The dev
+    # shell's skills live in the `skills-devshell/` sub-flake, run at
+    # runtime, so this flake carries no skill inputs.
+    agent-skill-flake = {
+      url = "github:nhooey/agent-skill-flake";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+        treefmt-nix.follows = "treefmt-nix";
+      };
+    };
   };
 
   outputs =
@@ -27,7 +38,12 @@
     flake-parts.lib.mkFlake { inherit inputs; } {
       systems = import systems;
 
-      imports = [ inputs.treefmt-nix.flakeModule ];
+      imports = [
+        inputs.agent-skill-flake.flakeModules.devshellSkills
+        inputs.treefmt-nix.flakeModule
+      ];
+
+      agent-skill-flake.devshellSkills.name = "nix-jetbrains-project-setup";
 
       flake.homeModules.default = import ./nix/home-module.nix self;
 
@@ -39,6 +55,7 @@
           checks = {
             # The unittest suite runs in the package's checkPhase.
             package = config.packages.default;
+            home-module = import ./nix/home-module-test.nix { inherit pkgs self; };
           };
 
           treefmt = {
@@ -50,11 +67,22 @@
             settings.formatter.ruff-format.options = [ "--line-length=120" ];
           };
 
-          devShells.default = pkgs.mkShell {
+          devshells.default = {
+            # The motd keeps the project's name, but the launcher must not
+            # shadow the installed `nix-jetbrains-project-setup` command.
+            name = "nix-jetbrains-project-setup-devshell";
             packages = [
               pkgs.python3
               pkgs.git
               pkgs.ruff
+            ];
+            commands = [
+              {
+                category = "dev";
+                name = "nix-jetbrains-project-setup-dev";
+                help = "test | check | fmt | run: the unittest suite, nix flake check, nix fmt, the command from the checkout";
+                command = ''exec python3 "$PRJ_ROOT/dev/nix_jetbrains_project_setup_dev.py" "$@"'';
+              }
             ];
           };
         };

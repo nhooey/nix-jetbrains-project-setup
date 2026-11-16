@@ -9,6 +9,7 @@ recorded as an opt-out and reported by `--check --json`.
 """
 
 import argparse
+import difflib
 import fnmatch
 import json
 import os
@@ -24,11 +25,9 @@ NAME = "nix-jetbrains-project-setup"
 MANIFEST = NAME + ".manifest.json"
 BEGIN = "# BEGIN " + NAME
 END = "# END " + NAME
-DEFAULTS = {
-    "excludeFolders": {".direnv": True, ".nix": True},
-    "excludePatterns": {"result": True, "result-*": True},
-    "sdks": {},
-}
+# Every config key with its default; it ships next to this script.
+DEFAULTS_FILE = os.path.join(os.path.dirname(os.path.realpath(__file__)), "defaults.json")
+# The keys a `projects` entry may set, over the global ones.
 PROJECT_KEYS = ("excludeFolders", "excludePatterns", "sdks")
 # IDE config dir prefix -> launcher name, used for `<name>.vmoptions`.
 PRODUCTS = {
@@ -178,31 +177,62 @@ def reconcile(desired, owned, present, optouts, source, block):
 # ----------------------------------------------------------------- config
 
 
+class ConfigError(Exception):
+    pass
+
+
+def load_defaults():
+    with open(DEFAULTS_FILE) as f:
+        return json.load(f)
+
+
 def load_config(path):
+    """The shipped defaults with the user's config file, if any, merged over them."""
+    defaults = load_defaults()
     if path is None:
         base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
         path = os.path.join(base, NAME, "config.json")
         if not os.path.exists(path):
-            return {}
+            return defaults
     with open(path) as f:
-        return json.load(f)
+        user = json.load(f)
+    check_config(user, defaults, tilde(path))
+    return merged(defaults, user)
+
+
+def check_config(user, defaults, where):
+    """Refuse unknown keys and values that aren't the default's kind."""
+
+    def check(cfg, known, where):
+        if not isinstance(cfg, dict):
+            raise ConfigError(f"{where}: expected an object")
+        for key, value in cfg.items():
+            if key not in known:
+                close = difflib.get_close_matches(key, known, n=1)
+                hint = f" (did you mean {close[0]!r}?)" if close else ""
+                raise ConfigError(f"{where}: unknown key {key!r}{hint}")
+            if type(value) is not type(defaults[key]):
+                kinds = (type(defaults[key]).__name__, type(value).__name__)
+                raise ConfigError(f"{where}: {key} must be %s, not %s" % kinds)
+
+    check(user, list(defaults), where)
+    for path, pcfg in merged(defaults, user)["projects"].items():
+        check(pcfg, PROJECT_KEYS, f"{where}: projects.{json.dumps(path)}")
 
 
 def merged(a, b):
+    """b over a: objects merge key by key at every level; anything else replaces."""
     out = dict(a)
     for k, v in b.items():
-        if isinstance(v, dict) and isinstance(out.get(k), dict):
-            out[k] = {**out[k], **v}
-        else:
-            out[k] = v
+        out[k] = merged(out[k], v) if isinstance(v, dict) and isinstance(out.get(k), dict) else v
     return out
 
 
 def project_settings(cfg, root):
-    settings = merged(DEFAULTS, {k: cfg[k] for k in PROJECT_KEYS if k in cfg})
-    for path, pcfg in cfg.get("projects", {}).items():
+    settings = {k: cfg[k] for k in PROJECT_KEYS}
+    for path, pcfg in cfg["projects"].items():
         if os.path.realpath(os.path.expanduser(path)) == root:
-            settings = merged(settings, {k: pcfg[k] for k in PROJECT_KEYS if k in pcfg})
+            settings = merged(settings, pcfg)
     return settings
 
 
@@ -309,7 +339,7 @@ def reconcile_excludes(run, root, settings, manifest, in_git):
                 elems[value[len(curl) + 1 :]] = el
         before = optouts.get(kind, {})
         add, remove, owned, kept = reconcile(
-            settings.get(kind, {}), manifest.get(kind, []), list(elems), before, source, block=False
+            settings[kind], manifest.get(kind, []), list(elems), before, source, block=False
         )
         for key, rec in kept.items():
             path = f"{kind}.{nix_attr(key)}"
@@ -483,8 +513,8 @@ def apply_jvm(run, cfg):
     manifest_path = os.path.join(state_dir(), "manifest.json")
     manifest = read_json(manifest_path)
     ides = manifest.get("ides", {})
-    desired = cfg.get("jvmOptions", {})
-    removes = cfg.get("removeJvmOptions", [])
+    desired = cfg["jvmOptions"]
+    removes = cfg["removeJvmOptions"]
     for ide in sorted(os.listdir(base)):
         match = IDE_DIR_RE.match(ide)
         ide_dir = os.path.join(base, ide)
@@ -533,11 +563,15 @@ def main(argv=None):
     if args.json and not args.check:
         parser.error("--json requires --check")
 
-    cfg = load_config(args.config)
+    try:
+        cfg = load_config(args.config)
+    except ConfigError as e:
+        print(f"{NAME}: error: {e}", file=sys.stderr)
+        return 2
     run = Run(dry=args.check)
     dirs = list(args.dirs)
     if args.all:
-        dirs += list(cfg.get("projects", {}))
+        dirs += list(cfg["projects"])
     elif not dirs and not args.jvm:
         dirs = ["."]
     for d in dirs:

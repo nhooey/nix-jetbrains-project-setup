@@ -101,8 +101,11 @@ agrees with it, e.g. once the config says `excludePatterns.result = false`.
 ## Config
 
 JSON at `$XDG_CONFIG_HOME/nix-jetbrains-project-setup/config.json` (default
-`~/.config/…`), or `--config FILE`. Lists of things are on/off attribute
-sets, so a GUI change can be written down as `false`:
+`~/.config/…`), or `--config FILE`. Every key and its default is in
+[`src/defaults.json`](src/defaults.json), which is installed beside the
+command and read on every run; your file names only what it changes, and
+with no file the command runs on the defaults. Lists of things are on/off
+attribute sets, so a GUI change can be written down as `false`:
 
 ```json
 {
@@ -128,7 +131,9 @@ sets, so a GUI change can be written down as `false`:
 | `projects` | global | Path (`~` allowed) → per-project keys. |
 
 Settings merge in order defaults → global → project; attribute sets merge
-key by key and the later one wins.
+key by key at every level and the later one wins, and a list replaces the
+earlier one whole. An unknown key, a project-scoped entry with a global-only
+key, or a value of the wrong kind is an error (exit 2) and nothing is changed.
 
 ## Drift report, for an agent to fold back into Nix
 
@@ -137,7 +142,7 @@ it corresponds to:
 
 ```json
 [
-  {"project": "~/git/nhooey/eventura", "path": "excludeFolders.result", "value": false, "was": true, "source": "eventura.iml"},
+  {"project": "~/git/nhooey/eventura", "path": "excludePatterns.result", "value": false, "was": true, "source": "eventura.iml"},
   {"ide": "IntelliJIdea2026.2", "path": "jvmOptions.\"-Xmx4096m\"", "value": false, "was": true, "source": "idea.vmoptions"}
 ]
 ```
@@ -202,11 +207,3 @@ the command merges into them.
   ```
 
   Unchanged files are never rewritten, so this costs a few milliseconds.
-
-## Follow-ups (v2)
-
-- Register each SDK in the IDE-wide `jdk.table.xml`, once, under a stable
-  name pointing at `.nix/sdk/<name>`, and only while that IDE isn't running
-  (an open IDE rewrites `jdk.table.xml` on exit).
-- Set the project SDK in `.idea/misc.xml`.
-- Rider's `.idea/.idea.<name>/` layout, which has no `modules.xml`.

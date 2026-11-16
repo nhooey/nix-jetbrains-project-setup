@@ -13,6 +13,7 @@ stdenvNoCC.mkDerivation {
   src = lib.fileset.toSource {
     root = ./.;
     fileset = lib.fileset.unions [
+      ./dev
       ./src
       ./tests
     ];
@@ -37,13 +38,17 @@ stdenvNoCC.mkDerivation {
     runHook postCheck
   '';
 
-  # `nix` is deliberately not wrapped in: SDK links are built with the
+  # The script reads defaults.json from its own directory, so both live in
+  # share/ and bin/ holds a wrapper. `nix` is deliberately not wrapped in: SDK links are built with the
   # caller's own nix, the one that talks to their daemon. git goes at the
   # end of PATH, only as a fallback for the tracked/ignored checks.
   installPhase = ''
     runHook preInstall
-    install -D -m u=rwx,go=rx src/nix_jetbrains_project_setup.py $out/bin/nix-jetbrains-project-setup
-    wrapProgram $out/bin/nix-jetbrains-project-setup --suffix PATH : ${lib.makeBinPath [ git ]}
+    share=$out/share/nix-jetbrains-project-setup
+    install -D -m u=rwx,go=rx src/nix_jetbrains_project_setup.py $share/nix_jetbrains_project_setup.py
+    install -D -m u=rw,go=r src/defaults.json $share/defaults.json
+    makeWrapper $share/nix_jetbrains_project_setup.py $out/bin/nix-jetbrains-project-setup \
+      --suffix PATH : ${lib.makeBinPath [ git ]}
     runHook postInstall
   '';
 
