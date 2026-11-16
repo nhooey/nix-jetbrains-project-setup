@@ -55,6 +55,7 @@
           checks = {
             # The unittest suite runs in the package's checkPhase.
             package = config.packages.default;
+            home-module = import ./nix/home-module-test.nix { inherit pkgs self; };
           };
 
           treefmt = {

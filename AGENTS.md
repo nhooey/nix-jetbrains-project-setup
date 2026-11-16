@@ -11,11 +11,14 @@ Plans live in `agents/plans/` (skill `coding-agent-plans-as-graph`).
 
 There is no CI. Before committing, run:
 
-- `nix flake check`: formatting (nixfmt, ruff) and the package build, which
-  runs the unittest suite. Stage new files first, since Nix only sees
-  tracked ones.
+- `nix flake check`: formatting (nixfmt, ruff), the package build, which
+  runs the unittest suite, and `nix/home-module-test.nix`, which evaluates
+  the Home Manager module against stub options. Stage new files first,
+  since Nix only sees tracked ones.
 - `python3 -m unittest discover -s tests` for a quick run. `nix fmt`
-  formats.
+  formats. `tests/support.py` holds the temp-dir fixtures,
+  `test_units.py` the pure functions, and the other modules drive `main()`
+  end to end.
 
 ## Rules
 
