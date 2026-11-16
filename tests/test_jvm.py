@@ -95,6 +95,47 @@ class JvmTests(Base):
         self.assertEqual(self.read(self.idea), text)
         self.assertEqual(self.cli("--check", "--jvm"), (0, "", ""))
 
+    def test_begin_without_end_skips_the_file(self):
+        broken = VMOPTIONS + f"\n{njps.BEGIN}\n-XX:+UseG1GC\n"
+        with open(self.idea, "w") as f:
+            f.write(broken)
+        self.config({"jvmOptions": {"-XX:+UseZGC": True}, "removeJvmOptions": ["-server"]})
+        code, _, err = self.cli("--jvm")
+        self.assertEqual(code, 0)
+        self.assertIn(f"IntelliJIdea2026.2: idea.vmoptions has '{njps.BEGIN}' but no '{njps.END}'; skipping", err)
+        self.assertEqual(self.read(self.idea), broken)
+        # Other IDEs are still reconciled.
+        self.assertIn("-XX:+UseZGC", self.read(os.path.join(self.jetbrains, "Rider2026.2", "rider.vmoptions")))
+
+    def test_64_bit_vmoptions_file_is_used_when_it_is_the_only_one(self):
+        goland = os.path.join(self.jetbrains, "GoLand2026.2")
+        os.makedirs(goland)
+        with open(os.path.join(goland, "goland64.vmoptions"), "w") as f:
+            f.write("-Xmx2g\n")
+        self.config({"jvmOptions": {"-XX:+UseG1GC": True}})
+        self.cli("--jvm")
+        self.assertEqual(sorted(os.listdir(goland)), ["goland64.vmoptions"])
+        self.assertEqual(
+            self.read(os.path.join(goland, "goland64.vmoptions")), f"-Xmx2g\n{njps.BEGIN}\n-XX:+UseG1GC\n{njps.END}\n"
+        )
+        state = json.loads(self.read(self.state))["ides"]["GoLand2026.2"]
+        self.assertEqual(state["file"], "goland64.vmoptions")
+
+    def test_created_file_is_kept_once_the_user_adds_lines(self):
+        rider = os.path.join(self.jetbrains, "Rider2026.2", "rider.vmoptions")
+        self.config({"jvmOptions": {"-XX:+UseG1GC": True}})
+        self.cli("--jvm")
+        with open(rider, "a") as f:
+            f.write("-Xss2m\n")
+        self.config({})
+        self.cli("--jvm")
+        self.assertEqual(self.read(rider), "-Xss2m\n")
+        # Still marked as created, so it goes away if it ever ends up empty again.
+        state = json.loads(self.read(self.state))["ides"]["Rider2026.2"]
+        self.assertEqual(state, {"created": True, "file": "rider.vmoptions"})
+        before = self.snapshot(self.jetbrains)
+        self.assertEqual(self.cli("--jvm"), (0, "", ""))
+        self.assertEqual(self.snapshot(self.jetbrains), before)
 
 
 if __name__ == "__main__":

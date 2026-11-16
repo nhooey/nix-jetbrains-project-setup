@@ -161,6 +161,28 @@ class ExcludeTests(Base):
         self.assertEqual(self.cli(root), (0, "", ""))
         self.assertEqual(self.snapshot(root), before)
 
+    def test_idea_without_modules_xml_is_skipped(self):
+        # Rider's .idea layout has no modules.xml; nothing may be bootstrapped into it.
+        root = os.path.join(self.home, "rider")
+        os.makedirs(os.path.join(root, ".idea"))
+        self.put(root, ".idea/workspace.xml", "<project />\n")
+        before = self.snapshot(root)
+        code, out, err = self.cli(root)
+        self.assertEqual((code, out), (0, ""))
+        self.assertIn("~/rider: no module in .idea/modules.xml has the project root as content", err)
+        self.assertEqual(self.snapshot(root), before)
+
+    def test_unignored_sdk_dir_warns(self):
+        root = self.project()
+        subprocess.run(["git", "init", "-q", root], check=True)
+        self.put(root, ".git/info/exclude", "/.idea\n*.iml\n")
+        self.config({"sdks": {"jdk": "nixpkgs#jdk21"}})
+        _, _, err = self.cli(root)
+        self.assertIn("~/proj: .nix/sdk is not git-ignored", err)
+        self.assertNotIn(".idea is not git-ignored", err)
+        self.put(root, ".git/info/exclude", "/.idea\n*.iml\n/.nix\n")
+        self.assertEqual(self.cli(root), (0, "", ""))
+
 
 class SdkTests(Base):
     def test_create_and_remove_links(self):
@@ -187,6 +209,70 @@ class SdkTests(Base):
         self.assertIn("was not made by", err)
         self.assertEqual(os.readlink(os.path.join(root, ".nix", "sdk", "jdk")), "/nowhere")
 
+    def builds(self):
+        try:
+            return self.read(self.nix_log).splitlines()
+        except FileNotFoundError:
+            return []
+
+    def link(self, root, name="jdk"):
+        return os.path.join(root, ".nix", "sdk", name)
+
+    def test_rebuild_sdks_rebuilds_present_links(self):
+        root = self.project()
+        self.config({"sdks": {"jdk": "nixpkgs#jdk21"}})
+        self.cli(root)
+        code, out, _ = self.cli("--rebuild-sdks", root)
+        self.assertEqual(code, 0)
+        self.assertIn(f"updated: nix build --out-link ~/proj/.nix/sdk/jdk nixpkgs#jdk21", out)
+        self.assertEqual(len(self.builds()), 2)
+
+    def test_changed_installable_rebuilds_and_updates_manifest(self):
+        root = self.project()
+        self.config({"sdks": {"jdk": "nixpkgs#jdk21"}})
+        self.cli(root)
+        self.config({"sdks": {"jdk": "nixpkgs#jdk25"}})
+        self.assertEqual(self.cli(root)[0], 0)
+        self.assertEqual(self.builds()[-1], f"build --out-link {self.link(root)} nixpkgs#jdk25")
+        self.assertTrue(os.readlink(self.link(root)).endswith("nixpkgs_jdk25"))
+        self.assertEqual(self.manifest(root)["sdks"], {"jdk": "nixpkgs#jdk25"})
+
+    def test_failed_build_exits_2_and_keeps_the_old_entry(self):
+        root = self.project()
+        self.config({"sdks": {"jdk": "nixpkgs#jdk21"}})
+        self.cli(root)
+        old_target = os.readlink(self.link(root))
+        self.config({"sdks": {"jdk": "nixpkgs#jdk25", "py": "nixpkgs#python3"}})
+        os.environ["STUB_NIX_FAIL"] = "1"
+        code, _, err = self.cli(root)
+        self.assertEqual(code, 2)
+        self.assertIn("~/proj: nix build nixpkgs#jdk25 failed", err)
+        self.assertEqual(os.readlink(self.link(root)), old_target)
+        # The new SDK never built, so the manifest does not claim it.
+        self.assertEqual(self.manifest(root)["sdks"], {"jdk": "nixpkgs#jdk21"})
+        del os.environ["STUB_NIX_FAIL"]
+        self.assertEqual(self.cli(root)[0], 0)
+        self.assertEqual(self.manifest(root)["sdks"], {"jdk": "nixpkgs#jdk25", "py": "nixpkgs#python3"})
+
+    def test_invalid_sdk_names_are_skipped(self):
+        root = self.project()
+        self.config({"sdks": {"../evil": "nixpkgs#hello", "a/b": "nixpkgs#hello", "..": "nixpkgs#hello"}})
+        code, _, err = self.cli(root)
+        self.assertEqual(code, 0)
+        for name in ("'../evil'", "'a/b'", "'..'"):
+            self.assertIn(f"invalid SDK name {name}", err)
+        self.assertEqual(self.builds(), [])
+        self.assertNotIn("sdks", self.manifest(root))
+
+    def test_check_reports_a_pending_build_without_running_it(self):
+        root = self.project()
+        self.cli(root)
+        self.config({"sdks": {"jdk": "nixpkgs#jdk21"}})
+        code, out, _ = self.cli("--check", root)
+        self.assertEqual(code, 1)
+        self.assertIn("would update: nix build --out-link ~/proj/.nix/sdk/jdk nixpkgs#jdk21", out)
+        self.assertEqual(self.builds(), [])
+        self.assertFalse(os.path.lexists(self.link(root)))
 
 
 if __name__ == "__main__":
