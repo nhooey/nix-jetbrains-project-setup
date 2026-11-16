@@ -202,11 +202,3 @@ the command merges into them.
   ```
 
   Unchanged files are never rewritten, so this costs a few milliseconds.
-
-## Follow-ups (v2)
-
-- Register each SDK in the IDE-wide `jdk.table.xml`, once, under a stable
-  name pointing at `.nix/sdk/<name>`, and only while that IDE isn't running
-  (an open IDE rewrites `jdk.table.xml` on exit).
-- Set the project SDK in `.idea/misc.xml`.
-- Rider's `.idea/.idea.<name>/` layout, which has no `modules.xml`.
