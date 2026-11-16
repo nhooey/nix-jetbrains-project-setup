@@ -9,6 +9,7 @@ recorded as an opt-out and reported by `--check --json`.
 """
 
 import argparse
+import difflib
 import fnmatch
 import json
 import os
@@ -176,6 +177,10 @@ def reconcile(desired, owned, present, optouts, source, block):
 # ----------------------------------------------------------------- config
 
 
+class ConfigError(Exception):
+    pass
+
+
 def load_defaults():
     with open(DEFAULTS_FILE) as f:
         return json.load(f)
@@ -190,7 +195,29 @@ def load_config(path):
         if not os.path.exists(path):
             return defaults
     with open(path) as f:
-        return merged(defaults, json.load(f))
+        user = json.load(f)
+    check_config(user, defaults, tilde(path))
+    return merged(defaults, user)
+
+
+def check_config(user, defaults, where):
+    """Refuse unknown keys and values that aren't the default's kind."""
+
+    def check(cfg, known, where):
+        if not isinstance(cfg, dict):
+            raise ConfigError(f"{where}: expected an object")
+        for key, value in cfg.items():
+            if key not in known:
+                close = difflib.get_close_matches(key, known, n=1)
+                hint = f" (did you mean {close[0]!r}?)" if close else ""
+                raise ConfigError(f"{where}: unknown key {key!r}{hint}")
+            if type(value) is not type(defaults[key]):
+                kinds = (type(defaults[key]).__name__, type(value).__name__)
+                raise ConfigError(f"{where}: {key} must be %s, not %s" % kinds)
+
+    check(user, list(defaults), where)
+    for path, pcfg in merged(defaults, user)["projects"].items():
+        check(pcfg, PROJECT_KEYS, f"{where}: projects.{json.dumps(path)}")
 
 
 def merged(a, b):
@@ -536,7 +563,11 @@ def main(argv=None):
     if args.json and not args.check:
         parser.error("--json requires --check")
 
-    cfg = load_config(args.config)
+    try:
+        cfg = load_config(args.config)
+    except ConfigError as e:
+        print(f"{NAME}: error: {e}", file=sys.stderr)
+        return 2
     run = Run(dry=args.check)
     dirs = list(args.dirs)
     if args.all:

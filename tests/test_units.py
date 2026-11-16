@@ -140,6 +140,33 @@ class ShippedDefaultsTests(Base):
         want["removeJvmOptions"] = ["-server"]
         self.assertEqual(njps.load_config(None), want)
 
+    def assertRefused(self, cfg, message):
+        self.config(cfg)
+        with self.assertRaises(njps.ConfigError) as raised:
+            njps.load_config(None)
+        self.assertIn(message, str(raised.exception))
+
+    def test_unknown_key_is_refused_with_the_closest_known_one(self):
+        self.assertRefused({"excludeFolder": {}}, "unknown key 'excludeFolder' (did you mean 'excludeFolders'?)")
+
+    def test_unknown_or_global_only_key_in_a_project_is_refused(self):
+        self.assertRefused({"projects": {"~/p": {"jvmOptions": {}}}}, "projects.\"~/p\": unknown key 'jvmOptions'")
+        self.assertRefused({"projects": {"~/p": []}}, 'projects."~/p": expected an object')
+
+    def test_value_of_the_wrong_kind_is_refused(self):
+        self.assertRefused([], "expected an object")
+        self.assertRefused({"removeJvmOptions": "-server"}, "removeJvmOptions must be list, not str")
+        self.assertRefused({"projects": {"~/p": {"sdks": []}}}, "sdks must be dict, not list")
+
+    def test_cli_reports_a_refused_config_and_changes_nothing(self):
+        root = self.project()
+        before = self.snapshot(root)
+        self.config({"exclude": {}})
+        code, _, err = self.cli(root)
+        self.assertEqual(code, 2)
+        self.assertIn(f"{njps.NAME}: error: ~/.config/{njps.NAME}/config.json: unknown key 'exclude'", err)
+        self.assertEqual(self.snapshot(root), before)
+
 
 class VmoptionsNameTests(Base):
     def names(self, *files, product="idea"):
