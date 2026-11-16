@@ -9,16 +9,21 @@ Plans live in `agents/plans/` (skill `coding-agent-plans-as-graph`).
 
 ## Checks
 
-There is no CI. Before committing, run:
+There is no CI. The dev shell's `nix-jetbrains-project-setup-dev`
+(`dev/nix_jetbrains_project_setup_dev.py`, in its menu) runs them; each
+token has `--help`. Before committing, run:
 
-- `nix flake check`: formatting (nixfmt, ruff), the package build, which
-  runs the unittest suite, and `nix/home-module-test.nix`, which evaluates
-  the Home Manager module against stub options. Stage new files first,
-  since Nix only sees tracked ones.
-- `python3 -m unittest discover -s tests` for a quick run. `nix fmt`
-  formats. `tests/support.py` holds the temp-dir fixtures,
-  `test_units.py` the pure functions, and the other modules drive `main()`
-  end to end.
+- `nix-jetbrains-project-setup-dev check`: formatting (nixfmt, ruff), the
+  package build, which runs the unittest suite, and
+  `nix/home-module-test.nix`, which evaluates the Home Manager module
+  against stub options. Stage new files first, since Nix only sees tracked
+  ones; it warns about untracked files.
+- `nix-jetbrains-project-setup-dev test [-v] [-k PATTERN]` for a quick run,
+  and `nix-jetbrains-project-setup-dev fmt` to format.
+  `nix-jetbrains-project-setup-dev run ARG ...` runs the command from the
+  checkout, on real files. `tests/support.py` holds the temp-dir fixtures,
+  `test_units.py` the pure functions, `test_dev.py` the dev tool, and the
+  other modules drive `main()` end to end.
 
 ## Rules
 
