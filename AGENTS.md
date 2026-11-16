@@ -5,6 +5,7 @@ standard library only. `package.nix` installs it as
 `bin/nix-jetbrains-project-setup` and runs the tests in its `checkPhase`;
 `nix/home-module.nix` is the Home Manager module (`homeModules.default`).
 `README.md` describes the behavior, the config and the drift JSON.
+Plans live in `agents/plans/` (skill `coding-agent-plans-as-graph`).
 
 ## Checks
 
@@ -31,4 +32,4 @@ There is no CI. Before committing, run:
 ## Conventions
 
 - **Branches and commits:** the default branch is `master`; commit messages
-  follow Conventional Commits.
+  follow Conventional Commits (skill `git-hygiene-conventional-commits`).
