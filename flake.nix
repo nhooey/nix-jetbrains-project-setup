@@ -76,6 +76,14 @@
               pkgs.git
               pkgs.ruff
             ];
+            commands = [
+              {
+                category = "dev";
+                name = "nix-jetbrains-project-setup-dev";
+                help = "test | check | fmt | run: the unittest suite, nix flake check, nix fmt, the command from the checkout";
+                command = ''exec python3 "$PRJ_ROOT/dev/nix_jetbrains_project_setup_dev.py" "$@"'';
+              }
+            ];
           };
         };
     };
