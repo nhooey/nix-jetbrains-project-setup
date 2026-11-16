@@ -133,7 +133,9 @@ attribute sets, so a GUI change can be written down as `false`:
 Settings merge in order defaults → global → project; attribute sets merge
 key by key at every level and the later one wins, and a list replaces the
 earlier one whole. An unknown key, a project-scoped entry with a global-only
-key, or a value of the wrong kind is an error (exit 2) and nothing is changed.
+key, or a value of the wrong kind (an on/off entry that isn't `true` or
+`false`, an installable or `removeJvmOptions` line that isn't a string) is an
+error (exit 2) and nothing is changed.
 
 ## Drift report, for an agent to fold back into Nix
 
