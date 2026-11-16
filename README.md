@@ -101,8 +101,11 @@ agrees with it, e.g. once the config says `excludePatterns.result = false`.
 ## Config
 
 JSON at `$XDG_CONFIG_HOME/nix-jetbrains-project-setup/config.json` (default
-`~/.config/…`), or `--config FILE`. Lists of things are on/off attribute
-sets, so a GUI change can be written down as `false`:
+`~/.config/…`), or `--config FILE`. Every key and its default is in
+[`src/defaults.json`](src/defaults.json), which is installed beside the
+command and read on every run; your file names only what it changes, and
+with no file the command runs on the defaults. Lists of things are on/off
+attribute sets, so a GUI change can be written down as `false`:
 
 ```json
 {
@@ -128,7 +131,8 @@ sets, so a GUI change can be written down as `false`:
 | `projects` | global | Path (`~` allowed) → per-project keys. |
 
 Settings merge in order defaults → global → project; attribute sets merge
-key by key and the later one wins.
+key by key at every level and the later one wins, and a list replaces the
+earlier one whole.
 
 ## Drift report, for an agent to fold back into Nix
 

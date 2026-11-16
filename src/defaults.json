@@ -1,0 +1,8 @@
+{
+  "excludeFolders": { ".direnv": true, ".nix": true },
+  "excludePatterns": { "result": true, "result-*": true },
+  "sdks": {},
+  "jvmOptions": {},
+  "removeJvmOptions": [],
+  "projects": {}
+}

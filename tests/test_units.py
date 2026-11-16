@@ -70,33 +70,35 @@ class ReconcileTests(unittest.TestCase):
 
 
 class ConfigTests(Base):
-    def test_merged_merges_dicts_one_level_and_replaces_the_rest(self):
-        a = {"d": {"x": True, "y": True}, "s": "old", "keep": 1}
-        b = {"d": {"y": False, "z": True}, "s": "new"}
-        self.assertEqual(njps.merged(a, b), {"d": {"x": True, "y": False, "z": True}, "s": "new", "keep": 1})
-        self.assertEqual(a["d"], {"x": True, "y": True})  # inputs untouched
+    def test_merged_merges_dicts_at_every_level_and_replaces_the_rest(self):
+        a = {"d": {"x": True, "y": True, "n": {"p": 1, "q": 2}}, "s": "old", "l": [1, 2], "keep": 1}
+        b = {"d": {"y": False, "z": True, "n": {"q": 3}}, "s": "new", "l": [3]}
+        self.assertEqual(
+            njps.merged(a, b),
+            {"d": {"x": True, "y": False, "z": True, "n": {"p": 1, "q": 3}}, "s": "new", "l": [3], "keep": 1},
+        )
+        self.assertEqual(a["d"], {"x": True, "y": True, "n": {"p": 1, "q": 2}})  # inputs untouched
 
     def test_project_settings_layers_defaults_global_and_matching_project(self):
         root = os.path.join(self.home, "proj")
-        cfg = {
-            "excludeFolders": {"target": True},
-            "jvmOptions": {"-Xmx1g": True},
-            "projects": {
-                "~/proj": {"excludeFolders": {".nix": False}, "sdks": {"jdk": "nixpkgs#jdk21"}},
-                "~/other": {"excludePatterns": {"*.log": True}},
-            },
-        }
+        self.config(
+            {
+                "excludeFolders": {"target": True},
+                "jvmOptions": {"-Xmx1g": True},
+                "projects": {
+                    "~/proj": {"excludeFolders": {".nix": False}, "sdks": {"jdk": "nixpkgs#jdk21"}},
+                    "~/other": {"excludePatterns": {"*.log": True}},
+                },
+            }
+        )
         self.assertEqual(
-            njps.project_settings(cfg, root),
+            njps.project_settings(njps.load_config(None), root),
             {
                 "excludeFolders": {".direnv": True, ".nix": False, "target": True},
                 "excludePatterns": {"result": True, "result-*": True},
                 "sdks": {"jdk": "nixpkgs#jdk21"},
             },
         )
-
-    def test_project_settings_without_config_is_the_defaults(self):
-        self.assertEqual(njps.project_settings({}, self.home), njps.DEFAULTS)
 
     def test_tilde_shortens_only_paths_under_home(self):
         self.assertEqual(njps.tilde(self.home), "~")
@@ -109,6 +111,34 @@ class ConfigTests(Base):
         self.assertEqual(njps.nix_attr("result-*"), '"result-*"')
         self.assertEqual(njps.nix_attr(".nix"), '".nix"')
         self.assertEqual(njps.nix_attr("-Xmx4096m"), '"-Xmx4096m"')
+
+
+class ShippedDefaultsTests(Base):
+    def test_defaults_file_holds_every_key_with_its_default(self):
+        self.assertEqual(
+            njps.load_defaults(),
+            {
+                "excludeFolders": {".direnv": True, ".nix": True},
+                "excludePatterns": {"result": True, "result-*": True},
+                "sdks": {},
+                "jvmOptions": {},
+                "removeJvmOptions": [],
+                "projects": {},
+            },
+        )
+        self.assertLessEqual(set(njps.PROJECT_KEYS), set(njps.load_defaults()))
+
+    def test_empty_or_missing_user_config_gives_exactly_the_defaults(self):
+        self.assertEqual(njps.load_config(None), njps.load_defaults())  # Base writes {}
+        os.remove(os.path.join(self.home, ".config", njps.NAME, "config.json"))
+        self.assertEqual(njps.load_config(None), njps.load_defaults())
+
+    def test_sparse_user_config_changes_only_its_keys(self):
+        self.config({"excludeFolders": {".nix": False}, "removeJvmOptions": ["-server"]})
+        want = njps.load_defaults()
+        want["excludeFolders"][".nix"] = False
+        want["removeJvmOptions"] = ["-server"]
+        self.assertEqual(njps.load_config(None), want)
 
 
 class VmoptionsNameTests(Base):
