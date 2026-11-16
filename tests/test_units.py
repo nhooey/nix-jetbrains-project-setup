@@ -158,6 +158,16 @@ class ShippedDefaultsTests(Base):
         self.assertRefused({"removeJvmOptions": "-server"}, "removeJvmOptions must be list, not str")
         self.assertRefused({"projects": {"~/p": {"sdks": []}}}, "sdks must be dict, not list")
 
+    def test_entry_of_the_wrong_kind_is_refused(self):
+        # A string is truthy, so "no" would otherwise exclude the folder.
+        self.assertRefused({"excludeFolders": {"x": "no"}}, 'excludeFolders."x" must be bool, not str')
+        self.assertRefused({"jvmOptions": {"-Xmx1g": 1}}, 'jvmOptions."-Xmx1g" must be bool, not int')
+        self.assertRefused({"removeJvmOptions": ["-server", 1]}, "removeJvmOptions[1] must be str, not int")
+        # An int installable would otherwise crash the nix build call.
+        self.assertRefused(
+            {"projects": {"~/p": {"sdks": {"jdk": 21}}}}, 'projects."~/p": sdks."jdk" must be str, not int'
+        )
+
     def test_cli_reports_a_refused_config_and_changes_nothing(self):
         root = self.project()
         before = self.snapshot(root)
