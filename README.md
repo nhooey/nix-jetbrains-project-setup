@@ -137,7 +137,7 @@ it corresponds to:
 
 ```json
 [
-  {"project": "~/git/nhooey/eventura", "path": "excludeFolders.result", "value": false, "was": true, "source": "eventura.iml"},
+  {"project": "~/git/nhooey/eventura", "path": "excludePatterns.result", "value": false, "was": true, "source": "eventura.iml"},
   {"ide": "IntelliJIdea2026.2", "path": "jvmOptions.\"-Xmx4096m\"", "value": false, "was": true, "source": "idea.vmoptions"}
 ]
 ```
