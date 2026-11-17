@@ -11,31 +11,17 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # Skill sources, the same repos `github:nhooey/skillspkgs` aggregates.
-    # They follow `nixpkgs` but not `agent-skill-flake`, so each keeps its own
-    # compatible builder.
-    coding-agent-skills = {
-      url = "github:nhooey/coding-agent-skills";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    git-skills = {
-      url = "github:nhooey/git-skills";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    nix-skills = {
-      url = "github:nhooey/nix-skills";
+    # Skill sources. They follow `nixpkgs` but not `agent-skill-flake`, so
+    # each keeps its own compatible builder.
+
+    # skillspkgs' per-family combinations; this repository is in the Nix
+    # tooling family.
+    skillspkgs-combinations = {
+      url = "github:nhooey/skillspkgs?dir=sources/combinations";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     python-skills = {
       url = "github:nhooey/python-skills";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    shell-skills = {
-      url = "github:nhooey/shell-skills";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    writing-skills = {
-      url = "github:nhooey/writing-skills";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -51,32 +37,14 @@
       systems = import inputs.systems;
       name = "nix-jetbrains-project-setup-devshell";
       sources = [
-        # Commits, branches and pull requests.
-        { source = inputs.git-skills; }
-        # Writing and bumping this flake, its package and its Home Manager
-        # module.
+        # The Nix tooling family's skills: the shared base, input bumping,
+        # shipped defaults and changelogs.
+        { source = inputs.skillspkgs-combinations.combinations.nix-tooling; }
+        # The command itself is Python 3, standard library only, which the
+        # rest of the Nix tooling family doesn't share.
         {
-          source = inputs.nix-skills;
-          skills = [
-            "nix-flakes"
-            "nix-flake-recursive-bump-input-versions"
-          ];
-        }
-        # The command itself: Python 3, standard library only.
-        { source = inputs.python-skills; }
-        # Safe shell commands: named deletes, PIDs, no machine-wide changes.
-        { source = inputs.shell-skills; }
-        # The README and the instruction files.
-        { source = inputs.writing-skills; }
-        # Running a prompt as a headless session in other checkouts, keeping
-        # the scratchpad tidy, and the cross-repository plan's graph.
-        {
-          source = inputs.coding-agent-skills;
-          skills = [
-            "coding-agent-headless-in-checkout"
-            "coding-agent-plans-as-graph"
-            "coding-agent-scratchpad-scripts"
-          ];
+          source = inputs.python-skills;
+          skills = [ "python-hygiene-functional-style" ];
         }
       ];
     };
