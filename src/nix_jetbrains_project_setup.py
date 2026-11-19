@@ -29,6 +29,15 @@ END = "# END " + NAME
 DEFAULTS_FILE = os.path.join(os.path.dirname(os.path.realpath(__file__)), "defaults.json")
 # The keys a `projects` entry may set, over the global ones.
 PROJECT_KEYS = ("excludeFolders", "excludePatterns", "sdks")
+# The kind of each entry in a config key's object or list: on/off sets hold
+# booleans, `sdks` installables and `removeJvmOptions` globs.
+ENTRY_KINDS = {
+    "excludeFolders": bool,
+    "excludePatterns": bool,
+    "sdks": str,
+    "jvmOptions": bool,
+    "removeJvmOptions": str,
+}
 # IDE config dir prefix -> launcher name, used for `<name>.vmoptions`.
 PRODUCTS = {
     "IntelliJIdea": "idea",
@@ -214,6 +223,12 @@ def check_config(user, defaults, where):
             if type(value) is not type(defaults[key]):
                 kinds = (type(defaults[key]).__name__, type(value).__name__)
                 raise ConfigError(f"{where}: {key} must be %s, not %s" % kinds)
+            kind = ENTRY_KINDS.get(key)
+            entries = value.items() if isinstance(value, dict) else enumerate(value)
+            for name, entry in entries if kind else ():
+                if type(entry) is not kind:
+                    at = f"{key}.{json.dumps(name)}" if isinstance(value, dict) else f"{key}[{name}]"
+                    raise ConfigError(f"{where}: {at} must be {kind.__name__}, not {type(entry).__name__}")
 
     check(user, list(defaults), where)
     for path, pcfg in merged(defaults, user)["projects"].items():
